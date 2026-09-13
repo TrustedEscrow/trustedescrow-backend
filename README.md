@@ -125,3 +125,7 @@ Arbitrators see a draft's messages and evidence only once its escrow has entered
 
 Errors are `{"error": {"code", "message", "details?"}}`.
 
+## License
+
+[MIT](LICENSE)
+

@@ -2,6 +2,7 @@
   "name": "trustescrow-backend",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "TrustEscrow backend: drafts, messaging, notifications, 2FA, encrypted code vault and read cache. Holds no authority over funds.",
   "type": "module",
   "engines": {

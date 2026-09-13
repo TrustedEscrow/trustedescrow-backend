@@ -4,6 +4,6 @@ coverage/
 .env
 .env.*
 !.env.example
-storage/
+/storage/
 *.log
 ARCHITECTURE.md

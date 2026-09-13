@@ -1,6 +1,6 @@
 # TrustEscrow backend
 
-The off-chain half of TrustEscrow ([ARCHITECTURE.md §6](ARCHITECTURE.md#6-backend)): order drafts and negotiation, messaging, deadline notifications, 2FA, the encrypted delivery-code vault, dispute evidence, and the read cache that answers "which escrows involve me".
+The off-chain half of TrustEscrow: order drafts and negotiation, messaging, deadline notifications, 2FA, the encrypted delivery-code vault, dispute evidence, and the read cache that answers "which escrows involve me".
 
 **Nothing here has authority over funds.** The API process holds no signing key and never submits a transaction. Escrow state is read live from contract storage; the cache only drives list views and notification schedules. If this whole service disappears, every escrow can still be completed or timed out from a CLI.
 
@@ -48,7 +48,7 @@ npm run typecheck
 Wallet sign-in uses [SEP-53](https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0053.md) signed messages. `POST /auth/challenge` issues a single-use message bound to `AUTH_DOMAIN`, the network passphrase, a nonce and an expiry; `POST /auth/login` verifies the signature and issues an opaque bearer session. Only the SHA-256 of the session token is stored.
 
 ### 2FA
-TOTP (RFC 6238) with ten single-use backup codes, replay protection, and a lockout after five failures. It gates what the backend mediates: signing in from a new device, changing the payout address, reading the code vault, and filing a dispute statement. These require a **step-up** (`POST /auth/step-up`) within the last five minutes. Users without 2FA step up by signing a fresh challenge with their wallet. 2FA does not and cannot gate on-chain calls (D13).
+TOTP (RFC 6238) with ten single-use backup codes, replay protection, and a lockout after five failures. It gates what the backend mediates: signing in from a new device, changing the payout address, reading the code vault, and filing a dispute statement. These require a **step-up** (`POST /auth/step-up`) within the last five minutes. Users without 2FA step up by signing a fresh challenge with their wallet. 2FA does not and cannot gate on-chain calls: anyone holding their key can call the contract directly.
 
 ### Drafts
 A draft is the negotiation before an escrow exists. Each proposal is an immutable revision. When both parties accept the same revision, its terms are frozen and `terms_hash = sha256(canonical_json(terms))` is fixed. Canonicalisation is RFC 8785, and the terms embed the draft id, so every hash is unique. `GET /drafts/:id/terms` returns the exact canonical bytes the buyer hashes into `Factory::create`.
@@ -64,12 +64,12 @@ Terms enforce the architecture's evidence rules: shipped goods need `Tracking` a
 - Password KDFs must meet a work-factor floor: Argon2id ≥ 64 MiB and 3 passes, PBKDF2 ≥ 600k iterations. A stolen database gives an attacker both the ciphertext and a tag to test guesses against.
 - No field may contain the plaintext code. This is checked by hashing candidates against the committed `release_code_hash`.
 
-The committed hash is write-once: there is no rotation (D11) and no delete. A buyer who adds a device adds another envelope, which needs a step-up. Reading requires a step-up and is written to the audit log.
+The committed hash is write-once: there is no rotation and no delete. Rotation would let a buyer hand over the code and then invalidate it before the seller's transaction confirmed. A buyer who adds a device adds another envelope, which needs a step-up. Reading requires a step-up and is written to the audit log.
 
 ### Keeping codes out of the database
 Messages, dispute statements, evidence descriptions and small text uploads are checked against the escrow's `release_code_hash` before anything is stored. A match is refused with `422 DELIVERY_CODE_IN_MESSAGE` (or the equivalent code for statements and evidence), and the response repeats the warning that the code is the money. The check is exact, so it has no false positives. It is a backstop; clients should warn first.
 
-There is intentionally **no** endpoint to verify a seller-claimed code for the arbitrator. The console hashes it locally (ARCHITECTURE §7 "Dispute", step 6).
+There is intentionally **no** endpoint to verify a seller-claimed code for the arbitrator. The console hashes it locally, so a plaintext code never reaches the server.
 
 ### Read cache and indexer
 - Polls `getEvents` for the factory's `escrow` event and each escrow's `funded`, `proof`, `disputed`, `released`, `refunded` and `cancelled` events.
@@ -125,17 +125,3 @@ Arbitrators see a draft's messages and evidence only once its escrow has entered
 
 Errors are `{"error": {"code", "message", "details?"}}`.
 
-## Assumptions to confirm against the contracts
-
-The contracts are not in this repository. The backend assumes:
-
-1. `Escrow::get` returns the `Escrow` struct from ARCHITECTURE §4, with snake_case fields. Optional parts are enums: `proof: Pending | Submitted(Proof)`, `dispute: NotOpened | Opened(Dispute)`, `settlement: Open | Released(ReleasePath) | Refunded(RefundPath)`. See `src/chain/decode.ts`. Decoding fails loudly on any other shape.
-2. Escrow events carry the event name as a `Symbol` in `topic[0]`.
-3. The factory's `escrow` event carries the new escrow's contract address somewhere in its data. The indexer searches the data for it.
-4. `cancel(caller: Address)` takes the caller, as documented. The keeper passes its own address after `funding_deadline`.
-
-## Not done yet
-
-- **Passkey smart-wallet sign-in (C… accounts).** Sign-in currently supports G… accounts through SEP-53. Contract-account sign-in needs verification against the wallet contract's signers.
-- **Object storage.** Evidence is stored on local disk behind the `BlobStorage` interface; production needs an object-store implementation.
-- **Real-time messaging.** Messages are fetched by polling with `?after=<seq>`. There is no push channel yet.

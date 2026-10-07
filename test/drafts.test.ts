@@ -342,6 +342,47 @@ describe('disputes, evidence and arbitration', () => {
     );
     expect(byRole.buyer!.onChainMatch).toBe(true);
     expect(byRole.seller!.onChainMatch).toBe(false);
+    expect(caseFile.ruling).toBeNull(); // no ruling recorded in this scenario
+  });
+
+  it('records an arbitrator ruling and flags whether it matches the on-chain ruling_hash', async () => {
+    const t = await agreedTrade();
+    const { escrowId } = await linkTrade(t);
+    const arb = await login(ctx.app, ctx.arbitrator);
+    const outsider = await login(ctx.app, Keypair.random());
+
+    const rulingText = 'The tracking evidence shows delivery to the stated address; releasing to the seller.';
+    expect((await ctx.app.inject({ method: 'POST', url: `/arbitration/escrows/${escrowId}/ruling`, headers: outsider.headers, payload: { ruling: rulingText } })).statusCode).toBe(403);
+
+    const posted = await ctx.app.inject({ method: 'POST', url: `/arbitration/escrows/${escrowId}/ruling`, headers: arb.headers, payload: { ruling: rulingText } });
+    expect(posted.statusCode).toBe(201);
+    const onChainRulingHash = posted.json().ruling_hash;
+    expect(onChainRulingHash).toBe(createHash('sha256').update(rulingText).digest('hex'));
+
+    // Before the contract records a ruling hash, nothing to compare against.
+    const beforeResolve = (await ctx.app.inject({ method: 'GET', url: `/arbitration/escrows/${escrowId}`, headers: arb.headers })).json();
+    expect(beforeResolve.ruling).toMatchObject({ ruling: rulingText, ruling_hash: onChainRulingHash, onChainMatch: null });
+
+    const now = ctx.clock.now();
+    const resolved = snapshotFor(escrowId, t.terms, t.termsHash, ctx.chain.escrows.get(escrowId)!.releaseCodeHash, {
+      state: 'Disputed',
+      dispute: { openedBy: 'Buyer', openedAt: now, fromState: 'Delivered', deadline: new Date(now.getTime() + 7 * 86400_000), statementHash: null, rulingHash: onChainRulingHash },
+    });
+    await recordSnapshot(ctx.db, resolved, {
+      now,
+      arbitratorAddresses: ctx.config.ARBITRATOR_ADDRESSES,
+      created: { buyer: t.buyer.publicKey(), seller: t.seller.publicKey(), ledger: 900, txHash: 'cc' },
+    });
+    ctx.chain.escrows.set(escrowId, resolved);
+
+    const afterResolve = (await ctx.app.inject({ method: 'GET', url: `/arbitration/escrows/${escrowId}`, headers: arb.headers })).json();
+    expect(afterResolve.ruling.onChainMatch).toBe(true);
+
+    // Editing the recorded ruling after the fact no longer matches what was actually committed.
+    const edited = await ctx.app.inject({ method: 'POST', url: `/arbitration/escrows/${escrowId}/ruling`, headers: arb.headers, payload: { ruling: `${rulingText} (amended)` } });
+    expect(edited.statusCode).toBe(201);
+    const afterEdit = (await ctx.app.inject({ method: 'GET', url: `/arbitration/escrows/${escrowId}`, headers: arb.headers })).json();
+    expect(afterEdit.ruling.onChainMatch).toBe(false);
   });
 });
 

@@ -81,6 +81,7 @@ export class FakeChain implements ChainClient {
 
 const APP_TABLES = [
   'audit_log',
+  'dispute_rulings',
   'dispute_statements',
   'evidence',
   'notifications',

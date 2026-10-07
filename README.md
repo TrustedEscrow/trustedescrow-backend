@@ -52,6 +52,26 @@ npm run typecheck
 npm run test:coverage
 ```
 
+## Running in Docker
+
+One image serves all four processes in the table above, since they share the same build output and dependencies. The API runs by default; override `CMD` to run a worker instead:
+
+```sh
+docker build -t trustescrow-backend .
+docker run --rm -p 3000:3000 --env-file .env trustescrow-backend                                  # API
+docker run --rm --env-file .env trustescrow-backend node dist/workers/indexer.js                  # indexer
+docker run --rm --env-file .env trustescrow-backend node dist/workers/notifier.js                  # notifier
+docker run --rm --env-file .env trustescrow-backend node dist/workers/keeper.js                    # keeper — needs KEEPER_SECRET
+```
+
+Run a migration against the container's own build output the same way, instead of `npm run migrate` (which needs `tsx` and the TypeScript source, neither present in this production image):
+
+```sh
+docker run --rm --env-file .env trustescrow-backend node dist/db/migrate-cli.js
+```
+
+The image runs as its base image's unprivileged `node` user, not root.
+
 ## How the pieces fit the trust model
 
 ### Sign-in

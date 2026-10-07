@@ -31,6 +31,7 @@ export interface NotificationPlan {
 const HOUR = 3600 * 1000;
 
 export const REMINDER_KINDS = {
+  funding: 'funding_deadline_24h',
   delivery: 'delivery_deadline_24h',
   receipt: 'receipt_deadline_24h',
   arbitration72: 'arbitration_deadline_72h',
@@ -155,9 +156,18 @@ export function planEscrowNotifications(s: EscrowSnapshot, now: Date): Notificat
       break;
 
     case 'Created':
+      remind(
+        ['buyer'],
+        REMINDER_KINDS.funding,
+        s.fundingDeadline,
+        24 * HOUR,
+        'Funding deadline in 24 hours',
+        'Fund this escrow within 24 hours or it will be cancelled. After the deadline anyone can cancel it.',
+      );
       break;
   }
 
+  if (s.state !== 'Created') cancelKinds.push(REMINDER_KINDS.funding);
   if (s.state !== 'Funded') cancelKinds.push(REMINDER_KINDS.delivery);
   if (s.state !== 'Delivered') cancelKinds.push(REMINDER_KINDS.receipt);
   if (s.state !== 'Disputed') cancelKinds.push(REMINDER_KINDS.arbitration72, REMINDER_KINDS.arbitration24);

@@ -69,7 +69,7 @@ export async function draftRoutes(app: FastifyInstance): Promise<void> {
     await trx.insertInto('draft_acceptances').values({ draft_id: draft.id, revision, user_id: userId }).execute();
   }
 
-  app.post('/drafts', { preHandler: authenticate }, async (req, reply) => {
+  app.post('/drafts', { preHandler: authenticate, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { user } = auth(req);
     const body = parse(CreateDraftBody, req.body);
     if (body.counterpartyAddress === user.address) throw badRequest('SELF_TRADE', 'You cannot trade with yourself');

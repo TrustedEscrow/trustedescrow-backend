@@ -60,6 +60,7 @@ export class Keeper {
 
   async tick(): Promise<void> {
     await this.runTimeouts();
+    await this.runFeeSweeps();
     await this.runBumps();
   }
 
@@ -95,6 +96,31 @@ export class Keeper {
       } catch (err) {
         // Another caller may have won the race; the next tick re-reads state.
         log.warn({ contractId: contract_id, err: String(err) }, 'keeper timeout call failed');
+      }
+    }
+  }
+
+  /**
+   * Retries the fee transfer for any escrow whose cache shows an unswept fee (set when the
+   * transfer to `fee_recipient` failed on release/refund). `sweep_fee` is permissionless and
+   * can only ever pay `fee_recipient`, same as every other call this job makes.
+   */
+  private async runFeeSweeps(): Promise<void> {
+    const { db, chain, config, log } = this.deps;
+    const candidates = await db.selectFrom('escrows').select('contract_id').where('unswept_fee', '!=', '0').limit(50).execute();
+
+    for (const { contract_id } of candidates) {
+      try {
+        // The cache may be stale, or another caller may have already swept it: decide on live state.
+        const live = await chain.getEscrow(contract_id);
+        if (live.unsweptFee !== '0') {
+          const hash = await this.invoke(contract_id, 'sweep_fee', []);
+          log.info({ contractId: contract_id, hash }, 'keeper swept unswept fee');
+        }
+        const after = await chain.getEscrow(contract_id);
+        await recordSnapshot(db, after, { now: this.deps.now(), arbitratorAddresses: config.ARBITRATOR_ADDRESSES });
+      } catch (err) {
+        log.warn({ contractId: contract_id, err: String(err) }, 'keeper fee sweep failed');
       }
     }
   }

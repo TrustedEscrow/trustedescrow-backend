@@ -159,6 +159,16 @@ describe('drafts and negotiation', () => {
     const draft = (await ctx.app.inject({ method: 'GET', url: `/drafts/${t.draftId}`, headers: t.s.headers })).json();
     expect(draft).toMatchObject({ status: 'linked', escrowContractId: escrowId, releaseCodeHash: codeHashHex(code) });
   });
+
+  it('rejects an escrow the factory did not deploy, even if its terms match', async () => {
+    const t = await agreedTrade();
+    const direct = contractAddress(42);
+    ctx.chain.escrows.set(direct, snapshotFor(direct, t.terms, t.termsHash, codeHashHex(randomCode())));
+    ctx.chain.factoryProvenanceOverride = contractAddress(99); // factory says a *different* address owns this buyer+salt
+    const res = await ctx.app.inject({ method: 'POST', url: `/drafts/${t.draftId}/link`, headers: t.b.headers, payload: { contractId: direct } });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.details.mismatches).toEqual(['factory_provenance']);
+  });
 });
 
 describe('messaging', () => {

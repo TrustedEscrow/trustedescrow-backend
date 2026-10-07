@@ -149,6 +149,7 @@ export interface EscrowsTable {
   token: string | null;
   amount: string | null;
   fee_bps: number | null;
+  unswept_fee: string | null;
   terms_hash: string | null;
   release_code_hash: string | null;
   funding_deadline: Timestamp | null;

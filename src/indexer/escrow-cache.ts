@@ -11,6 +11,7 @@ export function snapshotColumns(s: EscrowSnapshot, now: Date): EscrowRowUpdate {
     token: s.token,
     amount: s.amount,
     fee_bps: s.feeBps,
+    unswept_fee: s.unsweptFee,
     terms_hash: s.termsHash,
     release_code_hash: s.releaseCodeHash,
     funding_deadline: s.fundingDeadline,

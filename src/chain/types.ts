@@ -17,6 +17,13 @@ export interface EscrowSnapshot {
   feeRecipient: string;
   termsHash: string;
   releaseCodeHash: string;
+  /**
+   * The salt the buyer passed to `Factory::create`, hex-encoded. Lets a client (or this
+   * backend) prove the escrow was actually deployed by the configured factory, not just
+   * that it happens to run the same audited WASM with attacker-chosen terms — see
+   * `ChainClient.getFactoryEscrowAddress`.
+   */
+  salt: string;
   state: EscrowState;
   createdAt: Date;
   fundingDeadline: Date;
@@ -38,6 +45,13 @@ export interface EscrowSnapshot {
     rulingHash: string | null;
   } | null;
   settlement: { status: 'Open' } | { status: 'Released'; path: string } | { status: 'Refunded'; path: string };
+  /**
+   * i128 base units, decimal string. Zero unless a fee transfer failed on release (no
+   * trustline, or frozen) — the seller is still paid in full either way. Non-zero means
+   * the platform's own fee is recoverable later with the escrow's `sweep_fee`, which is
+   * permissionless, same as the keeper's other timeout/bump calls.
+   */
+  unsweptFee: string;
   /** Ledger the read was simulated against. */
   ledger: number;
 }
@@ -45,6 +59,12 @@ export interface EscrowSnapshot {
 /** Live contract reads. Escrow detail always comes from here, never from the cache. */
 export interface ChainReader {
   getEscrow(contractId: string): Promise<EscrowSnapshot>;
+  /**
+   * `Factory::escrow_address(buyer, salt)`: the address the factory would deploy to for
+   * this buyer and salt. An escrow whose own address doesn't match this was not deployed
+   * by the factory, whatever terms it happens to commit (see `EscrowSnapshot.salt`).
+   */
+  getFactoryEscrowAddress(factoryContractId: string, buyer: string, saltHex: string): Promise<string>;
 }
 
 export interface ChainEvent {

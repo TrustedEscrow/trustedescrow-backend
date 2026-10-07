@@ -119,6 +119,7 @@ export function decodeEscrow(contractId: string, native: unknown, ledger: number
     feeRecipient: str(e.fee_recipient, 'fee_recipient'),
     termsHash: hex(e.terms_hash, 'terms_hash'),
     releaseCodeHash: hex(e.release_code_hash, 'release_code_hash'),
+    salt: hex(e.salt, 'salt'),
     state: state as EscrowState,
     createdAt: date(e.created_at, 'created_at'),
     fundingDeadline: date(e.funding_deadline, 'funding_deadline'),
@@ -131,6 +132,7 @@ export function decodeEscrow(contractId: string, native: unknown, ledger: number
     proof,
     dispute,
     settlement,
+    unsweptFee: int(e.unswept_fee, 'unswept_fee').toString(),
     ledger,
   };
 }

@@ -48,12 +48,21 @@ export class FakeChain implements ChainClient {
   oldestLedger = 100;
   liveUntil = new Map<string, number>();
   getEscrowCalls = 0;
+  /** Set to make `getFactoryEscrowAddress` return something other than the escrow it was asked about, to test provenance mismatches. */
+  factoryProvenanceOverride: string | null = null;
+  private lastGetEscrowContractId: string | null = null;
 
   async getEscrow(id: string): Promise<EscrowSnapshot> {
     this.getEscrowCalls++;
+    this.lastGetEscrowContractId = id;
     const s = this.escrows.get(id);
     if (!s) throw new ChainError(`no escrow ${id}`, 'not_found');
     return { ...s, ledger: this.latestLedger };
+  }
+
+  /** Defaults to matching whatever escrow was last read, so tests that don't care about provenance pass without setup. */
+  async getFactoryEscrowAddress(_factoryContractId: string, _buyer: string, _saltHex: string): Promise<string> {
+    return this.factoryProvenanceOverride ?? this.lastGetEscrowContractId ?? '';
   }
 
   async getHealth() {
@@ -260,6 +269,7 @@ export function snapshotFor(
     feeRecipient: Keypair.random().publicKey(),
     termsHash,
     releaseCodeHash,
+    salt: '00'.repeat(32),
     state: 'Created',
     createdAt: new Date('2026-09-01T12:00:00Z'),
     fundingDeadline: new Date(terms.fundingDeadline * 1000),
@@ -272,6 +282,7 @@ export function snapshotFor(
     proof: null,
     dispute: null,
     settlement: { status: 'Open' },
+    unsweptFee: '0',
     ledger: 1000,
     ...overrides,
   };

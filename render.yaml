@@ -6,6 +6,10 @@
 # and how to generate SERVER_ENCRYPTION_KEY. KEEPER_DRY_RUN defaults to "true" here
 # so the keeper doesn't send real transactions until you deliberately flip it.
 #
+# FACTORY_CONTRACT_ID / ARBITRATOR_ADDRESSES / RAILS below point at the current
+# testnet deployment (see trustedescrow-contract's README "Live on testnet").
+# Update these together if that contract is ever redeployed.
+#
 # This file is written against Render's Blueprint spec as documented at the time it
 # was added; verify it against Render's current schema when you actually connect the
 # repo; it has not been applied against a real Render account.
@@ -18,11 +22,11 @@ envVarGroups:
       - key: SOROBAN_RPC_URL
         value: https://soroban-testnet.stellar.org
       - key: FACTORY_CONTRACT_ID
-        sync: false
+        value: CDBD65SK43MNCD5JW7HXXV3EMG2OH2UJ3FKJ2O6OEQINV7NJZOIUQMRP
       - key: ARBITRATOR_ADDRESSES
-        sync: false
+        value: GDLRZYARMBUC4HQW5MMZKV7X7C7656HZH7OI3HN55YYWM2FND64YDIBY
       - key: RAILS
-        sync: false
+        value: '[{"id":"usdc-stellar","tokenAddress":"CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA","displaySymbol":"USDC","decimals":7}]'
 
 services:
   - type: web
@@ -67,7 +71,7 @@ services:
           name: trustescrow-db
           property: connectionString
       - key: INDEXER_START_LEDGER
-        sync: false
+        value: "5067307"
 
   - type: worker
     name: trustescrow-notifier

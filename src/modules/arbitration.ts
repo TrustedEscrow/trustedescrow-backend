@@ -64,7 +64,7 @@ export async function arbitrationRoutes(app: FastifyInstance): Promise<void> {
       db
         .selectFrom('dispute_statements')
         .innerJoin('users', 'users.id', 'dispute_statements.user_id')
-        .select(['dispute_statements.role', 'dispute_statements.statement', 'dispute_statements.created_at', 'users.address'])
+        .select(['dispute_statements.role', 'dispute_statements.statement', 'dispute_statements.statement_hash', 'dispute_statements.created_at', 'users.address'])
         .where('draft_id', '=', draft.id)
         .orderBy('dispute_statements.created_at')
         .execute(),
@@ -76,6 +76,7 @@ export async function arbitrationRoutes(app: FastifyInstance): Promise<void> {
         .execute(),
     ]);
 
+    const onChainStatementHash = escrow.dispute?.statementHash ?? null;
     return {
       escrow,
       draft: { id: draft.id, agreedRevision: draft.agreed_revision, terms: rev.terms },
@@ -85,7 +86,14 @@ export async function arbitrationRoutes(app: FastifyInstance): Promise<void> {
         match: recomputed === escrow.termsHash,
       },
       messages,
-      statements,
+      /**
+       * `onChainMatch` is only meaningful for whichever statement the dispute's opener
+       * actually committed on-chain (the contract stores exactly one statement_hash per
+       * dispute) — null when there's nothing on-chain to compare against (e.g. a
+       * ReceiptTimeout-opened dispute has no statement), false for every statement that
+       * isn't the one the opener committed.
+       */
+      statements: statements.map((s) => ({ ...s, onChainMatch: onChainStatementHash === null ? null : s.statement_hash === onChainStatementHash })),
       evidence,
     };
   });

@@ -304,12 +304,54 @@ describe('disputes, evidence and arbitration', () => {
     const caseFile = (await ctx.app.inject({ method: 'GET', url: `/arbitration/escrows/${escrowId}`, headers: arb.headers })).json();
     expect(caseFile.termsCheck).toEqual({ onChain: t.termsHash, recomputed: t.termsHash, match: true });
     expect(caseFile.statements).toHaveLength(1);
+    expect(caseFile.statements[0].onChainMatch).toBeNull(); // no on-chain statement_hash recorded in this scenario
     expect(caseFile.evidence).toHaveLength(1);
 
     const arbNotes = (await ctx.app.inject({ method: 'GET', url: '/notifications', headers: arb.headers })).json();
     expect(arbNotes.map((n: { kind: string }) => n.kind)).toEqual(expect.arrayContaining(['dispute_new', 'dispute_statement']));
 
     expect((await ctx.app.inject({ method: 'GET', url: '/arbitration/disputes', headers: t.b.headers })).statusCode).toBe(403);
+  });
+
+  it('flags whether a stored statement matches the hash the dispute opener committed on-chain', async () => {
+    const t = await agreedTrade();
+    const { escrowId } = await linkTrade(t);
+    const arb = await login(ctx.app, ctx.arbitrator);
+
+    await stepUpWithWallet(ctx.app, t.buyer, t.b.headers);
+    const buyerStatement = 'The phone in the box is a different model.';
+    const buyerRes = await ctx.app.inject({ method: 'POST', url: `/drafts/${t.draftId}/dispute-case`, headers: t.b.headers, payload: { statement: buyerStatement } });
+    expect(buyerRes.statusCode).toBe(201);
+    const onChainStatementHash = buyerRes.json().statement_hash;
+    expect(onChainStatementHash).toBe(createHash('sha256').update(buyerStatement).digest('hex'));
+
+    await stepUpWithWallet(ctx.app, t.seller, t.s.headers);
+    const sellerRes = await ctx.app.inject({
+      method: 'POST',
+      url: `/drafts/${t.draftId}/dispute-case`,
+      headers: t.s.headers,
+      payload: { statement: 'It is the right model, the buyer is mistaken.' },
+    });
+    expect(sellerRes.statusCode).toBe(201);
+
+    const now = ctx.clock.now();
+    const disputed = snapshotFor(escrowId, t.terms, t.termsHash, ctx.chain.escrows.get(escrowId)!.releaseCodeHash, {
+      state: 'Disputed',
+      dispute: { openedBy: 'Buyer', openedAt: now, fromState: 'Delivered', deadline: new Date(now.getTime() + 7 * 86400_000), statementHash: onChainStatementHash, rulingHash: null },
+    });
+    await recordSnapshot(ctx.db, disputed, {
+      now,
+      arbitratorAddresses: ctx.config.ARBITRATOR_ADDRESSES,
+      created: { buyer: t.buyer.publicKey(), seller: t.seller.publicKey(), ledger: 900, txHash: 'bb' },
+    });
+    ctx.chain.escrows.set(escrowId, disputed);
+
+    const caseFile = (await ctx.app.inject({ method: 'GET', url: `/arbitration/escrows/${escrowId}`, headers: arb.headers })).json();
+    const byRole: Record<string, { onChainMatch: boolean | null }> = Object.fromEntries(
+      caseFile.statements.map((s: { role: string; onChainMatch: boolean | null }) => [s.role, s]),
+    );
+    expect(byRole.buyer!.onChainMatch).toBe(true);
+    expect(byRole.seller!.onChainMatch).toBe(false);
   });
 });
 

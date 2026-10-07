@@ -232,6 +232,7 @@ export interface DisputeStatementsTable {
   user_id: string;
   role: ParticipantRole;
   statement: string;
+  statement_hash: string | null;
   created_at: CreatedAt;
 }
 

@@ -236,6 +236,14 @@ export interface DisputeStatementsTable {
   created_at: CreatedAt;
 }
 
+export interface DisputeRulingsTable {
+  contract_id: string;
+  user_id: string;
+  ruling: string;
+  ruling_hash: string;
+  created_at: CreatedAt;
+}
+
 export interface AuditLogTable {
   id: Generated<string>;
   user_id: string | null;
@@ -265,6 +273,7 @@ export interface Database {
   notifications: NotificationsTable;
   evidence: EvidenceTable;
   dispute_statements: DisputeStatementsTable;
+  dispute_rulings: DisputeRulingsTable;
   audit_log: AuditLogTable;
 }
 

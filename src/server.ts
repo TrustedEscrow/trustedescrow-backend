@@ -4,7 +4,7 @@ import { loadConfig } from './config.js';
 import { createDb } from './db/index.js';
 import { SecretBox } from './lib/crypto.js';
 import { createMailer } from './notifications/mailer.js';
-import { LocalBlobStorage } from './storage/blob-storage.js';
+import { createBlobStorage } from './storage/blob-storage.js';
 
 const config = loadConfig();
 const db = createDb(config.DATABASE_URL);
@@ -14,7 +14,7 @@ const app = await buildApp({
   db,
   chain: new SorobanChain(config.SOROBAN_RPC_URL, config.STELLAR_NETWORK_PASSPHRASE),
   mailer: createMailer(config),
-  storage: new LocalBlobStorage(config.EVIDENCE_STORAGE_DIR),
+  storage: createBlobStorage(config),
   secretBox: new SecretBox(config.SERVER_ENCRYPTION_KEY),
   now: () => new Date(),
 });

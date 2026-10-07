@@ -121,7 +121,7 @@ export async function evidenceRoutes(app: FastifyInstance): Promise<void> {
       .header('content-disposition', `attachment; filename="${row.filename}"`)
       .header('x-content-type-options', 'nosniff')
       .header('x-evidence-sha256', row.sha256);
-    return reply.send(storage.read(row.storage_key));
+    return reply.send(await storage.read(row.storage_key));
   });
 
   /**

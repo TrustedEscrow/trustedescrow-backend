@@ -80,8 +80,18 @@ const EnvSchema = z.object({
   KEEPER_BUMP_THRESHOLD_LEDGERS: z.coerce.number().int().positive().default(17280 * 7),
   KEEPER_DRY_RUN: bool,
 
+  /** 'local' doesn't survive a redeploy or scale across instances; see S3BlobStorage for production. */
+  EVIDENCE_STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   EVIDENCE_STORAGE_DIR: z.string().default('./storage/evidence'),
   EVIDENCE_MAX_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
+  EVIDENCE_S3_BUCKET: z.string().default(''),
+  EVIDENCE_S3_REGION: z.string().default('auto'),
+  /** Set for an S3-compatible provider that isn't AWS itself (R2, MinIO, etc.); leave unset for real AWS S3. */
+  EVIDENCE_S3_ENDPOINT: z.string().default(''),
+  EVIDENCE_S3_ACCESS_KEY_ID: z.string().default(''),
+  EVIDENCE_S3_SECRET_ACCESS_KEY: z.string().default(''),
+  /** Some S3-compatible providers (notably MinIO) need path-style URLs instead of virtual-hosted-style. */
+  EVIDENCE_S3_FORCE_PATH_STYLE: bool,
 });
 
 export type Config = z.infer<typeof EnvSchema>;

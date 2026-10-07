@@ -1,0 +1,116 @@
+# Render Blueprint: one Postgres database plus the API and the three worker
+# processes, all built from the same Dockerfile (see README "Running in Docker").
+#
+# Connect this repo as a Blueprint in the Render dashboard, then fill in the
+# `sync: false` values it prompts for — see .env.example for what each one means
+# and how to generate SERVER_ENCRYPTION_KEY. KEEPER_DRY_RUN defaults to "true" here
+# so the keeper doesn't send real transactions until you deliberately flip it.
+#
+# This file is written against Render's Blueprint spec as documented at the time it
+# was added; verify it against Render's current schema when you actually connect the
+# repo; it has not been applied against a real Render account.
+
+envVarGroups:
+  - name: trustescrow-shared
+    envVars:
+      - key: STELLAR_NETWORK_PASSPHRASE
+        value: "Test SDF Network ; September 2015"
+      - key: SOROBAN_RPC_URL
+        value: https://soroban-testnet.stellar.org
+      - key: FACTORY_CONTRACT_ID
+        sync: false
+      - key: ARBITRATOR_ADDRESSES
+        sync: false
+      - key: RAILS
+        sync: false
+
+services:
+  - type: web
+    name: trustescrow-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - fromGroup: trustescrow-shared
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trustescrow-db
+          property: connectionString
+      - key: SERVER_ENCRYPTION_KEY
+        sync: false
+      - key: PUBLIC_WEB_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: AUTH_DOMAIN
+        sync: false
+      - key: EVIDENCE_STORAGE_DIR
+        value: ./storage/evidence
+
+  - type: worker
+    name: trustescrow-indexer
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node dist/workers/indexer.js
+    envVars:
+      - fromGroup: trustescrow-shared
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trustescrow-db
+          property: connectionString
+      - key: INDEXER_START_LEDGER
+        sync: false
+
+  - type: worker
+    name: trustescrow-notifier
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node dist/workers/notifier.js
+    envVars:
+      - fromGroup: trustescrow-shared
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trustescrow-db
+          property: connectionString
+      - key: EMAIL_DRIVER
+        value: console
+      - key: SMTP_URL
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+
+  - type: worker
+    name: trustescrow-keeper
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node dist/workers/keeper.js
+    envVars:
+      - fromGroup: trustescrow-shared
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trustescrow-db
+          property: connectionString
+      - key: KEEPER_SECRET
+        sync: false
+      - key: KEEPER_DRY_RUN
+        value: "true"
+
+databases:
+  - name: trustescrow-db
+    databaseName: trustescrow
+    user: trustescrow
+    plan: free

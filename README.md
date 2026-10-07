@@ -72,6 +72,12 @@ docker run --rm --env-file .env trustescrow-backend node dist/db/migrate-cli.js
 
 The image runs as its base image's unprivileged `node` user, not root.
 
+### Deploying on Render
+
+[`render.yaml`](render.yaml) is a Blueprint for all four processes plus a managed Postgres database, built from the same Dockerfile. Connect this repo as a Blueprint in the Render dashboard, then fill in the values it prompts for (`SERVER_ENCRYPTION_KEY`, `FACTORY_CONTRACT_ID`, `ARBITRATOR_ADDRESSES`, `RAILS`, `KEEPER_SECRET`, and anything CORS/email-related). `KEEPER_DRY_RUN` defaults to `"true"` so the keeper doesn't send real transactions until you deliberately flip it. Run the first migration once via Render's shell (or a one-off job): `node dist/db/migrate-cli.js`.
+
+**Evidence storage is ephemeral on Render's web service disk** — `LocalBlobStorage` writes to the local filesystem, which Render does not persist across deploys or restarts on the free/starter plan. This is a known limitation, not something this blueprint works around; don't rely on uploaded evidence surviving a redeploy until the storage backend is swapped for an object store.
+
 ## How the pieces fit the trust model
 
 ### Sign-in

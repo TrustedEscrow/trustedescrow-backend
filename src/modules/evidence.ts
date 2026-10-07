@@ -6,6 +6,7 @@ import { auth, authenticate, requireStepUp } from '../auth/session.js';
 import { IdParams, parse } from '../http/validation.js';
 import { audit } from '../lib/audit.js';
 import { containsDeliveryCode } from '../lib/delivery-code.js';
+import { sha256Hex } from '../lib/crypto.js';
 import { badRequest, conflict, forbidden, notFound, unprocessable } from '../lib/errors.js';
 import { arbitratorUsers, notifyUsers } from '../notifications/store.js';
 import { counterpartyUserIds, draftAccess, knownReleaseCodeHash } from './access.js';
@@ -140,10 +141,11 @@ export async function evidenceRoutes(app: FastifyInstance): Promise<void> {
       throw unprocessable('DELIVERY_CODE_IN_STATEMENT', 'Remove the delivery code from your statement. The platform never stores codes.');
     }
 
+    const statementHash = sha256Hex(statement);
     const row = await db
       .insertInto('dispute_statements')
-      .values({ draft_id: draft.id, user_id: user.id, role, statement })
-      .returning(['id', 'role', 'statement', 'created_at'])
+      .values({ draft_id: draft.id, user_id: user.id, role, statement, statement_hash: statementHash })
+      .returning(['id', 'role', 'statement', 'statement_hash', 'created_at'])
       .executeTakeFirstOrThrow();
     await audit(db, req, user.id, 'dispute.statement_added', draft.id);
 
@@ -167,7 +169,14 @@ export async function evidenceRoutes(app: FastifyInstance): Promise<void> {
     return db
       .selectFrom('dispute_statements')
       .innerJoin('users', 'users.id', 'dispute_statements.user_id')
-      .select(['dispute_statements.id', 'dispute_statements.role', 'dispute_statements.statement', 'dispute_statements.created_at', 'users.address'])
+      .select([
+        'dispute_statements.id',
+        'dispute_statements.role',
+        'dispute_statements.statement',
+        'dispute_statements.statement_hash',
+        'dispute_statements.created_at',
+        'users.address',
+      ])
       .where('draft_id', '=', draft.id)
       .orderBy('dispute_statements.created_at')
       .execute();

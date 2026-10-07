@@ -149,6 +149,7 @@ export interface EscrowsTable {
   token: string | null;
   amount: string | null;
   fee_bps: number | null;
+  unswept_fee: string | null;
   terms_hash: string | null;
   release_code_hash: string | null;
   funding_deadline: Timestamp | null;
@@ -231,6 +232,15 @@ export interface DisputeStatementsTable {
   user_id: string;
   role: ParticipantRole;
   statement: string;
+  statement_hash: string | null;
+  created_at: CreatedAt;
+}
+
+export interface DisputeRulingsTable {
+  contract_id: string;
+  user_id: string;
+  ruling: string;
+  ruling_hash: string;
   created_at: CreatedAt;
 }
 
@@ -263,6 +273,7 @@ export interface Database {
   notifications: NotificationsTable;
   evidence: EvidenceTable;
   dispute_statements: DisputeStatementsTable;
+  dispute_rulings: DisputeRulingsTable;
   audit_log: AuditLogTable;
 }
 

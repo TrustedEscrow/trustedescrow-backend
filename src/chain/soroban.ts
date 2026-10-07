@@ -54,6 +54,13 @@ export class SorobanChain implements ChainClient {
     return decodeEscrow(contractId, scValToNative(retval), latestLedger);
   }
 
+  async getFactoryEscrowAddress(factoryContractId: string, buyer: string, saltHex: string): Promise<string> {
+    const buyerArg = new Address(buyer).toScVal();
+    const saltArg = xdr.ScVal.scvBytes(Buffer.from(saltHex, 'hex'));
+    const { retval } = await this.simulateRead(factoryContractId, 'escrow_address', buyerArg, saltArg);
+    return scValToNative(retval) as string;
+  }
+
   async getInstanceLiveUntil(contractId: string) {
     const key = xdr.LedgerKey.contractData(
       new xdr.LedgerKeyContractData({

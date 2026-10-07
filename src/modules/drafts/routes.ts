@@ -296,6 +296,12 @@ export async function draftRoutes(app: FastifyInstance): Promise<void> {
 
     const snapshot = await readEscrowOrThrow(chain, contractId);
     if (draft.status === 'agreed') {
+      if (config.FACTORY_CONTRACT_ID) {
+        const expected = await chain.getFactoryEscrowAddress(config.FACTORY_CONTRACT_ID, snapshot.buyer, snapshot.salt);
+        if (expected !== contractId) {
+          throw new HttpError(422, 'ESCROW_TERMS_MISMATCH', 'The escrow does not commit the agreed terms', { mismatches: ['factory_provenance'] });
+        }
+      }
       const mismatches = await db.transaction().execute((trx) => tryLinkDraft(trx, draft.id, snapshot, now()));
       if (mismatches.length > 0) {
         throw new HttpError(422, 'ESCROW_TERMS_MISMATCH', 'The escrow does not commit the agreed terms', { mismatches });

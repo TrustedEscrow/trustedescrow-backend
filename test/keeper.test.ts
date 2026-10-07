@@ -25,7 +25,7 @@ describe('dueAction', () => {
     ['Delivered', snap({ state: 'Delivered', receiptDeadline: at(D) }), 'escalate'],
     [
       'Disputed',
-      snap({ state: 'Disputed', dispute: { openedBy: 'Buyer', openedAt: at(D - 10), fromState: 'Funded', deadline: at(D) } }),
+      snap({ state: 'Disputed', dispute: { openedBy: 'Buyer', openedAt: at(D - 10), fromState: 'Funded', deadline: at(D), statementHash: null, rulingHash: null } }),
       'refund_after_arbitration_timeout',
     ],
   ] as const)('%s: nothing before the deadline, the timeout at it', (_state, s, method) => {
@@ -78,5 +78,32 @@ describe('Keeper (dry run)', () => {
     );
     const row = await ctx.db.selectFrom('escrows').select('last_bumped_at').where('contract_id', '=', id).executeTakeFirstOrThrow();
     expect(row.last_bumped_at).not.toBeNull();
+  });
+
+  it('sweeps an unswept fee the cache knows about, and leaves an already-swept one alone', async () => {
+    const owed = contractAddress(82);
+    const clean = contractAddress(83);
+    const cachedOwed = snap({ contractId: owed, state: 'Released', unsweptFee: '500' });
+    const cachedClean = snap({ contractId: clean, state: 'Released', unsweptFee: '0' });
+    for (const [id, cached] of [[owed, cachedOwed], [clean, cachedClean]] as const) {
+      await recordSnapshot(ctx.db, cached, { now: ctx.clock.now(), arbitratorAddresses: [], created: { buyer: terms.buyer, seller: terms.seller, ledger: 1, txHash: 'x' } });
+      ctx.chain.escrows.set(id, cached);
+      ctx.chain.liveUntil.set(id, ctx.chain.latestLedger + 1_000_000);
+    }
+
+    const actions: object[] = [];
+    const keeper = new Keeper({
+      db: ctx.db,
+      chain: ctx.chain,
+      server: {} as rpc.Server,
+      keypair: Keypair.random(),
+      config: { ...ctx.config, KEEPER_DRY_RUN: true },
+      now: ctx.clock.now,
+      log: { info: (o) => actions.push(o), warn: (o) => actions.push({ warn: o }) },
+    });
+    await keeper.tick();
+
+    expect(actions).toEqual(expect.arrayContaining([expect.objectContaining({ contractId: owed, method: 'sweep_fee' })]));
+    expect(actions).not.toEqual(expect.arrayContaining([expect.objectContaining({ contractId: clean, method: 'sweep_fee' })]));
   });
 });

@@ -45,7 +45,7 @@ describe('planEscrowNotifications', () => {
 
   it('distinguishes an escalation from a party-opened dispute', () => {
     const dispute = (openedBy: string) =>
-      snap({ state: 'Disputed', dispute: { openedBy, openedAt: now, fromState: 'Delivered', deadline: new Date(now.getTime() + 7 * 24 * HOUR) } });
+      snap({ state: 'Disputed', dispute: { openedBy, openedAt: now, fromState: 'Delivered', deadline: new Date(now.getTime() + 7 * 24 * HOUR), statementHash: null, rulingHash: null } });
     expect(summary(dispute('ReceiptTimeout'))).toEqual([
       `arbitrator:${REMINDER_KINDS.arbitration24}`,
       `arbitrator:${REMINDER_KINDS.arbitration72}`,

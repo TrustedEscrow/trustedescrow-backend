@@ -31,6 +31,7 @@ function escrowScVal(overrides: Record<string, xdr.ScVal> = {}) {
     fee_recipient: new Address(Keypair.random().publicKey()).toScVal(),
     terms_hash: bytes(7),
     release_code_hash: bytes(8),
+    salt: bytes(9),
     state: variant('Funded'),
     created_at: u64(1_788_000_000),
     funding_deadline: u64(1_788_086_400),
@@ -43,6 +44,7 @@ function escrowScVal(overrides: Record<string, xdr.ScVal> = {}) {
     proof: variant('Pending'),
     dispute: variant('NotOpened'),
     settlement: variant('Open'),
+    unswept_fee: nativeToScVal(0n, { type: 'i128' }),
     ...overrides,
   });
 }
@@ -59,12 +61,14 @@ describe('decodeEscrow', () => {
       feeBps: 100,
       termsHash: '07'.repeat(32),
       releaseCodeHash: '08'.repeat(32),
+      salt: '09'.repeat(32),
       state: 'Funded',
       deliveryWindow: 259_200,
       receiptDeadline: null,
       proof: null,
       dispute: null,
       settlement: { status: 'Open' },
+      unsweptFee: '0',
       ledger: 42,
     });
     expect(s.deliveryDeadline).toEqual(new Date(1_788_260_200 * 1000));
@@ -87,16 +91,48 @@ describe('decodeEscrow', () => {
           ),
           dispute: variant(
             'Opened',
-            struct({ opened_by: variant('ReceiptTimeout'), opened_at: u64(1_788_300_000), from_state: variant('Delivered'), deadline: u64(1_788_904_800) }),
+            struct({
+              opened_by: variant('ReceiptTimeout'),
+              opened_at: u64(1_788_300_000),
+              from_state: variant('Delivered'),
+              deadline: u64(1_788_904_800),
+              statement_hash: bytes(0),
+              ruling_hash: bytes(0),
+            }),
           ),
           settlement: variant('Refunded', variant('ArbitrationTimeout')),
+          unswept_fee: nativeToScVal(15_000_000n, { type: 'i128' }),
         }),
       ),
       1,
     );
     expect(s.proof).toEqual({ kind: 'Tracking', uri: 'https://track.example/ABC123', hash: '03'.repeat(32), submittedAt: new Date(1_788_100_000_000) });
-    expect(s.dispute).toMatchObject({ openedBy: 'ReceiptTimeout', fromState: 'Delivered' });
+    expect(s.dispute).toMatchObject({ openedBy: 'ReceiptTimeout', fromState: 'Delivered', statementHash: null, rulingHash: null });
     expect(s.settlement).toEqual({ status: 'Refunded', path: 'ArbitrationTimeout' });
+    expect(s.unsweptFee).toBe('15000000');
+  });
+
+  it('decodes a committed statement and ruling hash, and treats the zero hash as unset', () => {
+    const s = decodeEscrow(
+      ESCROW,
+      scValToNative(
+        escrowScVal({
+          dispute: variant(
+            'Opened',
+            struct({
+              opened_by: variant('Buyer'),
+              opened_at: u64(1_788_300_000),
+              from_state: variant('Delivered'),
+              deadline: u64(1_788_904_800),
+              statement_hash: bytes(5),
+              ruling_hash: bytes(0),
+            }),
+          ),
+        }),
+      ),
+      1,
+    );
+    expect(s.dispute).toMatchObject({ statementHash: '05'.repeat(32), rulingHash: null });
   });
 
   it('fails loudly on an unexpected shape', () => {

@@ -26,6 +26,7 @@ export function presentCachedEscrow(r: EscrowRow) {
     token: r.token,
     amount: r.amount,
     feeBps: r.fee_bps,
+    unsweptFee: r.unswept_fee,
     termsHash: r.terms_hash,
     deadlines: {
       funding: r.funding_deadline,

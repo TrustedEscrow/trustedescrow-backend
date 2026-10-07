@@ -1,5 +1,7 @@
 # TrustEscrow backend
 
+[![CI](https://github.com/TrustedEscrow/trustedescrow-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/TrustedEscrow/trustedescrow-backend/actions/workflows/ci.yml)
+
 The off-chain half of TrustEscrow: order drafts and negotiation, messaging, deadline notifications, 2FA, the encrypted delivery-code vault, dispute evidence, and the read cache that answers "which escrows involve me".
 
 **Nothing here has authority over funds.** The API process holds no signing key and never submits a transaction. Escrow state is read live from contract storage; the cache only drives list views and notification schedules. If this whole service disappears, every escrow can still be completed or timed out from a CLI.
@@ -40,6 +42,14 @@ Tests run against an in-memory Postgres (PGlite), so they need no database:
 ```sh
 npm test
 npm run typecheck
+```
+
+### Code coverage
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) measures line coverage with [`@vitest/coverage-v8`](https://vitest.dev/guide/coverage) on every push and pull request, fails the build below 77% lines (the measured baseline, rounded down — not a guessed target; raise it as coverage genuinely improves), and uploads the report as a workflow artifact. Reproduce locally with:
+
+```sh
+npm run test:coverage
 ```
 
 ## Running in Docker

@@ -1,6 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { Keypair } from '@stellar/stellar-sdk';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { buildApp } from '../src/app.js';
+import { SecretBox } from '../src/lib/crypto.js';
+import { LocalBlobStorage } from '../src/storage/blob-storage.js';
 import { recordSnapshot } from '../src/indexer/escrow-cache.js';
 import {
   codeHashHex,
@@ -105,6 +108,44 @@ describe('drafts and negotiation', () => {
     expect((await post(termsInput(ctx.clock, { fundingDeadline: ctx.clock.seconds - 1 }))).json().error.code).toBe('INVALID_FUNDING_DEADLINE');
     expect((await post(termsInput(ctx.clock, { windows: { delivery: 60, receipt: 3600, arbitration: 3600 } }))).statusCode).toBe(400);
     expect((await post(termsInput(ctx.clock, { amount: '0' }))).statusCode).toBe(400);
+  });
+
+  it('enforces per-route rate limiting on POST /drafts', async () => {
+    const rateApp = await buildApp(
+      {
+        config: ctx.config,
+        db: ctx.db,
+        chain: ctx.chain,
+        mailer: ctx.mailer,
+        storage: new LocalBlobStorage(ctx.config.EVIDENCE_STORAGE_DIR),
+        secretBox: new SecretBox(ctx.config.SERVER_ENCRYPTION_KEY),
+        now: ctx.clock.now,
+      },
+      { logger: false, rateLimit: true },
+    );
+    try {
+      const buyer = Keypair.random();
+      const seller = Keypair.random();
+      const b = await login(rateApp, buyer);
+      for (let i = 0; i < 20; i++) {
+        const res = await rateApp.inject({
+          method: 'POST',
+          url: '/drafts',
+          headers: b.headers,
+          payload: { role: 'buyer', counterpartyAddress: seller.publicKey(), terms: termsInput(ctx.clock) },
+        });
+        expect(res.statusCode).toBe(201);
+      }
+      const limited = await rateApp.inject({
+        method: 'POST',
+        url: '/drafts',
+        headers: b.headers,
+        payload: { role: 'buyer', counterpartyAddress: seller.publicKey(), terms: termsInput(ctx.clock) },
+      });
+      expect(limited.statusCode).toBe(429);
+    } finally {
+      await rateApp.close();
+    }
   });
 
   it('reopens negotiation on a counter-proposal and rejects stale acceptance', async () => {

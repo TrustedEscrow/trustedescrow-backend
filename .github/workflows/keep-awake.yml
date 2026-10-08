@@ -1,0 +1,59 @@
+name: Keep awake
+
+# Render's free tier stops the service after about 15 minutes idle, and the first
+# request after that takes 25-35 seconds while it starts again. That is fine for a
+# repo but bad for someone evaluating the live demo, who sees a page that appears
+# to hang. This pings the health endpoint often enough that it never sleeps.
+#
+# Two things worth knowing before relying on it:
+#
+#  * GitHub does not promise punctual schedules. Runs are delayed under load and
+#    occasionally skipped, so the interval is 5 minutes rather than 10 to leave
+#    room for drift against the 15-minute idle timer. It is still best effort. For
+#    a judging window where it genuinely matters, run a dedicated uptime monitor
+#    alongside this.
+#  * Render's free plan allows 750 instance hours a month and staying awake all
+#    month costs about 730, so this leaves little room for a second free service.
+#
+# Turn it off from the Actions tab when the demo period is over.
+
+on:
+  schedule:
+    # Every 5 minutes. Avoid :00 — the top of the hour is the most contended slot.
+    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
+  workflow_dispatch:
+
+# Never let a slow cold start pile runs up on top of each other.
+concurrency:
+  group: keep-awake
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the API health endpoint
+        env:
+          # /healthz runs `select 1` against Postgres before answering, so a pass
+          # means the database is reachable too, not just that Node booted.
+          URL: https://trustescrow-api-k5us.onrender.com/healthz
+        run: |
+          for attempt in 1 2 3; do
+            if body=$(curl -sS --max-time 90 -w '\n%{http_code}\n%{time_total}' "$URL"); then
+              code=$(printf '%s' "$body" | tail -2 | head -1)
+              secs=$(printf '%s' "$body" | tail -1)
+              payload=$(printf '%s' "$body" | head -n -2)
+              if [ "$code" = "200" ] && printf '%s' "$payload" | grep -q '"status":"ok"'; then
+                echo "awake after ${secs}s (attempt $attempt): $payload"
+                exit 0
+              fi
+              echo "attempt $attempt: HTTP $code in ${secs}s -> $payload"
+            else
+              echo "attempt $attempt: request failed"
+            fi
+            sleep 10
+          done
+          echo "::error::API did not report healthy after 3 attempts"
+          exit 1

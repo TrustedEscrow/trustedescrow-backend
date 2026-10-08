@@ -138,6 +138,26 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     reply.code(204);
   });
 
+  /**
+   * For "that wasn't me" moments (e.g. right after the payout-address-changed
+   * notice): revokes every other active session in one call instead of making
+   * the user delete them one at a time. Step-up gated, same as other
+   * account-security actions.
+   */
+  app.post('/me/sessions/revoke-all', sensitive, async (req) => {
+    const { user, session } = auth(req);
+    const res = await db
+      .updateTable('sessions')
+      .set({ revoked_at: now() })
+      .where('user_id', '=', user.id)
+      .where('id', '!=', session.id)
+      .where('revoked_at', 'is', null)
+      .executeTakeFirst();
+    const revokedCount = Number(res.numUpdatedRows);
+    await audit(db, req, user.id, 'auth.sessions_revoked_all', null, { revokedCount });
+    return { revokedCount };
+  });
+
   app.get('/me/devices', { preHandler: authenticate }, async (req) => {
     const { user } = auth(req);
     return db

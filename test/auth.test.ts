@@ -161,3 +161,28 @@ describe('payout address', () => {
     expect((await change()).json().error.code).toBe('STEP_UP_REQUIRED');
   });
 });
+
+describe('sessions', () => {
+  it("revokes every other session in one call, but never the caller's own", async () => {
+    const kp = Keypair.random();
+    const first = await login(ctx.app, kp, 'device-0000000000000001');
+    const second = await login(ctx.app, kp, 'device-0000000000000002');
+
+    const before = await ctx.app.inject({ method: 'POST', url: '/me/sessions/revoke-all', headers: second.headers });
+    expect(before.json().error.code).toBe('STEP_UP_REQUIRED');
+
+    await stepUpWithWallet(ctx.app, kp, second.headers);
+    const res = await ctx.app.inject({ method: 'POST', url: '/me/sessions/revoke-all', headers: second.headers });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ revokedCount: 1 });
+
+    // The session that made the call still works.
+    expect((await ctx.app.inject({ method: 'GET', url: '/me', headers: second.headers })).statusCode).toBe(200);
+    // The other session was revoked.
+    expect((await ctx.app.inject({ method: 'GET', url: '/me', headers: first.headers })).statusCode).toBe(401);
+
+    // Calling it again revokes nothing further.
+    const again = await ctx.app.inject({ method: 'POST', url: '/me/sessions/revoke-all', headers: second.headers });
+    expect(again.json()).toEqual({ revokedCount: 0 });
+  });
+});

@@ -6,6 +6,25 @@ The off-chain half of TrustEscrow: order drafts and negotiation, messaging, dead
 
 **Nothing here has authority over funds.** The API process holds no signing key and never submits a transaction. Escrow state is read live from contract storage; the cache only drives list views and notification schedules. If this whole service disappears, every escrow can still be completed or timed out from a CLI.
 
+## Live deployment
+
+| | |
+|---|---|
+| **Base URL** | `https://trustescrow-api-k5us.onrender.com` |
+| **Health** | [`/healthz`](https://trustescrow-api-k5us.onrender.com/healthz) — `{"status":"ok"}` only after `select 1` reaches Postgres, so it covers the database too |
+| **Host** | Render, free tier, built from the [`Dockerfile`](Dockerfile) |
+| **Network** | Stellar testnet, factory `CDBD65SK43MNCD5JW7HXXV3EMG2OH2UJ3FKJ2O6OEQINV7NJZOIUQMRP` |
+| **Consumer** | [trustedescrow-frontend-eta.vercel.app](https://trustedescrow-frontend-eta.vercel.app) |
+
+There is no route at `/`; an unauthenticated `GET /healthz` is the only thing worth curling. CORS is restricted to the deployed frontend origins, so a browser on any other origin is refused by design.
+
+**This deployment runs the API only.** Render's free tier has no background workers, so the indexer, notifier and keeper are built and tested but not running. In practice: list views can lag the chain, no emails go out, and no timeout or TTL call happens on its own. None of that traps funds — every call those workers make is permissionless, so anyone can make it, and escrow pages read contract storage directly.
+
+Two free-tier limits worth knowing before pointing anyone at this:
+
+- **It sleeps after about 15 minutes idle,** and the first request after that takes 25-35 seconds while the container starts. [`.github/workflows/keep-awake.yml`](.github/workflows/keep-awake.yml) tries to prevent that by pinging `/healthz` on a schedule, with a second interleaved schedule in the frontend repo. Treat it as best effort: GitHub does not promise punctual cron, and in practice these schedules are delayed or dropped often enough that a cold start still happens. An off-GitHub uptime monitor is the only reliable fix.
+- **The managed Postgres instance expires 30 days after creation.** When it does, anything that needs the database — sign-in, drafts, chat, the vault, notifications — stops, while on-chain escrows are unaffected.
+
 ## Processes
 
 | Process | Entry | What it does | Holds a key? |

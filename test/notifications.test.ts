@@ -20,6 +20,20 @@ const snap = (o: Partial<EscrowSnapshot>) => snapshotFor(contractAddress(70), te
 const summary = (s: EscrowSnapshot) => planEscrowNotifications(s, now).upserts.map((u) => `${u.audience}:${u.kind}`).sort();
 
 describe('planEscrowNotifications', () => {
+  it('reminds the buyer 24h before the funding deadline, and only the buyer', () => {
+    const deadline = new Date(now.getTime() + 48 * HOUR);
+    const plan = planEscrowNotifications(snap({ state: 'Created', fundingDeadline: deadline }), now);
+    expect(plan.upserts.map((u) => `${u.audience}:${u.kind}`)).toEqual([`buyer:${REMINDER_KINDS.funding}`]);
+    expect(plan.upserts[0]!.sendAt).toEqual(new Date(deadline.getTime() - 24 * HOUR));
+    expect(plan.cancelKinds).not.toContain(REMINDER_KINDS.funding);
+
+    const late = planEscrowNotifications(snap({ state: 'Created', fundingDeadline: new Date(now.getTime() - HOUR) }), now);
+    expect(late.upserts).toEqual([]);
+
+    const funded = planEscrowNotifications(snap({ state: 'Funded', deliveryDeadline: new Date(now.getTime() + 48 * HOUR) }), now);
+    expect(funded.cancelKinds).toContain(REMINDER_KINDS.funding);
+  });
+
   it('tells the seller about funding and reminds them 24h before the delivery deadline', () => {
     const deadline = new Date(now.getTime() + 72 * HOUR);
     const plan = planEscrowNotifications(snap({ state: 'Funded', deliveryDeadline: deadline }), now);

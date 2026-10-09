@@ -10,9 +10,18 @@
 # testnet deployment (see trustedescrow-contract's README "Live on testnet").
 # Update these together if that contract is ever redeployed.
 #
-# This file is written against Render's Blueprint spec as documented at the time it
-# was added; verify it against Render's current schema when you actually connect the
-# repo; it has not been applied against a real Render account.
+# Shaped for Render's free tier: one web service plus one free Postgres. The three
+# worker processes are declared but commented out at the bottom, because free plans
+# run web services only.
+#
+# Migrations do NOT run on boot (the image's CMD is just the server), and a free
+# service has no shell, no Jobs and no pre-deploy command. So after the database
+# exists, run them once from a laptop against its EXTERNAL connection string:
+#
+#   DATABASE_URL='<external connection string>' npm run migrate
+#
+# Without that the API answers /healthz — which only does `select 1` — while every
+# real route fails on missing tables.
 
 envVarGroups:
   - name: trustescrow-shared
@@ -56,62 +65,75 @@ services:
       - key: EVIDENCE_STORAGE_DIR
         value: ./storage/evidence
 
-  - type: worker
-    name: trustescrow-indexer
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    dockerCommand: node dist/workers/indexer.js
-    envVars:
-      - fromGroup: trustescrow-shared
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: trustescrow-db
-          property: connectionString
-      - key: INDEXER_START_LEDGER
-        value: "5067307"
-
-  - type: worker
-    name: trustescrow-notifier
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    dockerCommand: node dist/workers/notifier.js
-    envVars:
-      - fromGroup: trustescrow-shared
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: trustescrow-db
-          property: connectionString
-      - key: EMAIL_DRIVER
-        value: console
-      - key: SMTP_URL
-        sync: false
-      - key: EMAIL_FROM
-        sync: false
-
-  - type: worker
-    name: trustescrow-keeper
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    dockerCommand: node dist/workers/keeper.js
-    envVars:
-      - fromGroup: trustescrow-shared
-      - key: NODE_ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: trustescrow-db
-          property: connectionString
-      - key: KEEPER_SECRET
-        sync: false
-      - key: KEEPER_DRY_RUN
-        value: "true"
+# --- the three workers ------------------------------------------------------
+#
+# Commented out, not deleted. Render's free tier runs web services only, and a
+# Blueprint that declares a `type: worker` stalls asking for a paid plan, so
+# leaving these active makes the whole file unappliable on free. The code for
+# all three is built and tested; it just has nowhere free to run.
+#
+# Uncomment on a paid plan to get: list views that keep up with the chain
+# (indexer), deadline emails (notifier), and automatic timeout/TTL calls
+# (keeper). Nothing is trapped without them — every call they make is
+# permissionless, so anyone can make it, and escrow pages read the contract
+# directly. See README "Live deployment".
+#
+#   - type: worker
+#     name: trustescrow-indexer
+#     runtime: docker
+#     dockerfilePath: ./Dockerfile
+#     dockerContext: .
+#     dockerCommand: node dist/workers/indexer.js
+#     envVars:
+#       - fromGroup: trustescrow-shared
+#       - key: NODE_ENV
+#         value: production
+#       - key: DATABASE_URL
+#         fromDatabase:
+#           name: trustescrow-db
+#           property: connectionString
+#       - key: INDEXER_START_LEDGER
+#         value: "5067307"
+#
+#   - type: worker
+#     name: trustescrow-notifier
+#     runtime: docker
+#     dockerfilePath: ./Dockerfile
+#     dockerContext: .
+#     dockerCommand: node dist/workers/notifier.js
+#     envVars:
+#       - fromGroup: trustescrow-shared
+#       - key: NODE_ENV
+#         value: production
+#       - key: DATABASE_URL
+#         fromDatabase:
+#           name: trustescrow-db
+#           property: connectionString
+#       - key: EMAIL_DRIVER
+#         value: console
+#       - key: SMTP_URL
+#         sync: false
+#       - key: EMAIL_FROM
+#         sync: false
+#
+#   - type: worker
+#     name: trustescrow-keeper
+#     runtime: docker
+#     dockerfilePath: ./Dockerfile
+#     dockerContext: .
+#     dockerCommand: node dist/workers/keeper.js
+#     envVars:
+#       - fromGroup: trustescrow-shared
+#       - key: NODE_ENV
+#         value: production
+#       - key: DATABASE_URL
+#         fromDatabase:
+#           name: trustescrow-db
+#           property: connectionString
+#       - key: KEEPER_SECRET
+#         sync: false
+#       - key: KEEPER_DRY_RUN
+#         value: "true"
 
 databases:
   - name: trustescrow-db

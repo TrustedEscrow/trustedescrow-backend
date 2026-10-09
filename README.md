@@ -20,11 +20,6 @@ There is no route at `/`; an unauthenticated `GET /healthz` is the only thing wo
 
 **This deployment runs the API only.** Render's free tier has no background workers, so the indexer, notifier and keeper are built and tested but not running. In practice: list views can lag the chain, no emails go out, and no timeout or TTL call happens on its own. None of that traps funds — every call those workers make is permissionless, so anyone can make it, and escrow pages read contract storage directly.
 
-Two free-tier limits worth knowing before pointing anyone at this:
-
-- **It sleeps after about 15 minutes idle,** and the first request after that takes 25-35 seconds while the container starts. [`.github/workflows/keep-awake.yml`](.github/workflows/keep-awake.yml) tries to prevent that by pinging `/healthz` on a schedule, with a second interleaved schedule in the frontend repo. Treat it as best effort: GitHub does not promise punctual cron, and in practice these schedules are delayed or dropped often enough that a cold start still happens. An off-GitHub uptime monitor is the only reliable fix.
-- **The managed Postgres instance expires 30 days after creation.** When it does, anything that needs the database — sign-in, drafts, chat, the vault, notifications — stops, while on-chain escrows are unaffected.
-
 ## Processes
 
 | Process | Entry | What it does | Holds a key? |
@@ -93,10 +88,8 @@ The image runs as its base image's unprivileged `node` user, not root.
 
 ### Deploying on Render
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/TrustedEscrow/trustedescrow-backend)
-
-That button opens Render's Blueprint flow against [`render.yaml`](render.yaml), which
-creates the API and a free Postgres and then prompts for the four values it will not
+Connect this repo as a Blueprint in the Render dashboard. [`render.yaml`](render.yaml)
+creates the API and a free Postgres, then prompts for the four values it will not
 invent for you:
 
 | Prompt | What to give it |

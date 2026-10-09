@@ -64,6 +64,14 @@ export async function buildApp(
   await app.register(helmet);
   await app.register(cors, {
     origin: deps.config.CORS_ORIGINS.length > 0 ? deps.config.CORS_ORIGINS : [deps.config.PUBLIC_WEB_URL],
+    // @fastify/cors defaults to GET,HEAD,POST. Without this the preflight for a
+    // PUT, PATCH or DELETE still answers 204, but omits the method from
+    // Access-Control-Allow-Methods, so the browser never sends the request and
+    // the client sees a network failure rather than an HTTP status. That made
+    // the delivery-code vault (`PUT /drafts/:id/vault`) unreachable from the
+    // web app, and with it escrow creation, which cannot proceed until the code
+    // is stored. Keep this list in step with the methods the routes use.
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
   });
   if (opts.rateLimit !== false) await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
   await app.register(multipart, { limits: { fileSize: deps.config.EVIDENCE_MAX_BYTES, files: 1, fields: 4 } });

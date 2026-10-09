@@ -93,6 +93,34 @@ The image runs as its base image's unprivileged `node` user, not root.
 
 ### Deploying on Render
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/TrustedEscrow/trustedescrow-backend)
+
+That button opens Render's Blueprint flow against [`render.yaml`](render.yaml), which
+creates the API and a free Postgres and then prompts for the four values it will not
+invent for you:
+
+| Prompt | What to give it |
+|---|---|
+| `SERVER_ENCRYPTION_KEY` | 32 random bytes, base64: `openssl rand -base64 32`. Encrypts TOTP seeds at rest, never delivery codes. |
+| `PUBLIC_WEB_URL` | The deployed frontend's origin. |
+| `CORS_ORIGINS` | The same origin. Anything else is refused by design, so a wrong value here looks like the API being down. |
+| `AUTH_DOMAIN` | The frontend's host, no scheme. It is embedded in login challenges so a signature cannot be replayed against another site — the `trustescrow.local` default is wrong in production. |
+
+Then migrate once, from a laptop, against the database's **external** connection
+string, because migrations do not run on boot and a free service has no shell:
+
+```sh
+DATABASE_URL='<external connection string>' npm run migrate
+```
+
+Skipping that is quiet rather than loud: `/healthz` only runs `select 1`, so it keeps
+answering `ok` while every route that touches a table fails.
+
+Finally turn on **Settings → Build & Deploy → Auto-Deploy** for `main`. Render needs
+its GitHub App on the repository to hear about pushes; without it the service keeps
+serving whatever was deployed by hand, however many commits land afterwards.
+
+
 [`render.yaml`](render.yaml) is a Blueprint for all four processes plus a managed Postgres database, built from the same Dockerfile. Connect this repo as a Blueprint in the Render dashboard, then fill in the values it prompts for (`SERVER_ENCRYPTION_KEY`, `FACTORY_CONTRACT_ID`, `ARBITRATOR_ADDRESSES`, `RAILS`, `KEEPER_SECRET`, and anything CORS/email-related). `KEEPER_DRY_RUN` defaults to `"true"` so the keeper doesn't send real transactions until you deliberately flip it. Run the first migration once via Render's shell (or a one-off job): `node dist/db/migrate-cli.js`.
 
 **Evidence storage is ephemeral on Render's web service disk** — `LocalBlobStorage` writes to the local filesystem, which Render does not persist across deploys or restarts on the free/starter plan. This is a known limitation, not something this blueprint works around; don't rely on uploaded evidence surviving a redeploy until the storage backend is swapped for an object store.

@@ -201,6 +201,22 @@ Arbitrators see a draft's messages and evidence only once its escrow has entered
 
 Errors are `{"error": {"code", "message", "details?"}}`.
 
+## Contributing
+
+New contributors start with [CONTRIBUTING.md](https://github.com/TrustedEscrow/trustedescrow-docs/blob/main/CONTRIBUTING.md) in the
+docs repository. It covers all four repositories in one place: prerequisites, cloning
+them side by side, building and testing each one, and which configuration value flows
+from which repository into the next.
+
+Issues in this repository are written to be picked up cold. Each states what is wrong
+or missing and why it matters, rather than only what to type. Work lands through forks
+and pull requests against `main`.
+
+Wider context lives in the same repository: [ARCHITECTURE.md](https://github.com/TrustedEscrow/trustedescrow-docs/blob/main/ARCHITECTURE.md)
+for the system design, [THREAT_MODEL.md](https://github.com/TrustedEscrow/trustedescrow-docs/blob/main/THREAT_MODEL.md) for what is
+trustless and what is not, and [GOVERNANCE.md](https://github.com/TrustedEscrow/trustedescrow-docs/blob/main/GOVERNANCE.md) for how
+decisions get made.
+
 ## License
 
 [MIT](LICENSE)
